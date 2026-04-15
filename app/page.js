@@ -38,7 +38,8 @@ function FloatingDucks() {
 
 function StatsBar({ sightings }) {
   const latest = sightings[0]
-  const todayCount = sightings.filter((s) => Date.now() - new Date(s.created_at).getTime() < 86400000).length
+  const today = new Date().toDateString()
+  const todayCount = sightings.filter((s) => new Date(s.spotted_at || s.created_at).toDateString() === today).length
   const uniqueLocs = new Set(sightings.map((s) => s.landmark_id)).size
   const totalLikes = sightings.reduce((a, b) => a + (b.likes || 0), 0)
   const stats = [
@@ -64,9 +65,7 @@ function SafetyTips() {
   const [open, setOpen] = useState(false)
   const tips = [
     { icon: '🚫', text: '먹이 주지 않기 (빵은 해로워요!)' },
-    { icon: '📏', text: '2m 이상 거리 유지하기' },
-    { icon: '🤫', text: '큰 소리 내지 않기' },
-    { icon: '🐕', text: '반려동물은 리드줄 짧게' },
+    { icon: '🙅', text: '가까이 가지 않기' },
     { icon: '📞', text: '다친 오리 발견 시 구청 신고' },
   ]
   return (
@@ -107,7 +106,7 @@ function StreamMap({ sightings, onSelect, selected }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative', zIndex: 3, padding: '0 8px' }}>
           {LANDMARKS.map((lm) => {
             const s = latest[lm.id]; const isSel = selected?.id === lm.id
-            const isRecent = s && Date.now() - new Date(s.created_at).getTime() < 7200000
+            const isRecent = s && Date.now() - new Date(s.spotted_at || s.created_at).getTime() < 7200000
             return (
               <div key={lm.id} onClick={() => onSelect(lm)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', transition: 'transform .2s', transform: isSel ? 'scale(1.15)' : 'scale(1)', minWidth: 48 }}>
                 <div style={{ height: 28, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: 4 }}>
@@ -160,7 +159,12 @@ function SightingCard({ sighting, onLike, isAdmin, onDelete }) {
           <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#d4ecf7,#e8f4e8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🦆</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, color: '#1b4332', fontFamily: "'Noto Sans KR',sans-serif" }}>{sighting.username || '익명'}</div>
-            <div style={{ fontSize: 11, color: '#6b9080', fontFamily: "'Noto Sans KR',sans-serif" }}>{timeAgo(sighting.created_at)}</div>
+            <div style={{ fontSize: 11, color: '#6b9080', fontFamily: "'Noto Sans KR',sans-serif" }}>
+              {sighting.spotted_at
+                ? `🕐 ${new Date(sighting.spotted_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}에 발견 · ${timeAgo(sighting.created_at)} 제보`
+                : timeAgo(sighting.created_at)
+              }
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: 'linear-gradient(135deg,#fff9e6,#fff3cc)', borderRadius: 20, border: '1px solid rgba(253,203,110,.3)' }}>
@@ -210,10 +214,24 @@ function ReportForm({ selectedLandmark, onSubmit, onClose }) {
   const [photo, setPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [spottedTime, setSpottedTime] = useState('now')
   const fileRef = useRef(null)
   useEffect(() => { const s = typeof window !== 'undefined' ? localStorage.getItem('duck_username') : null; if (s) setUsername(s) }, [])
   const handlePhoto = (e) => { const f = e.target.files?.[0]; if (!f) return; setPhoto(f); const r = new FileReader(); r.onload = (ev) => setPhotoPreview(ev.target.result); r.readAsDataURL(f) }
-  const handleSubmit = async () => { if (!comment.trim()) return; setSubmitting(true); if (username) localStorage.setItem('duck_username', username); await onSubmit({ landmark, duckCount, comment, username, photo }); setSubmitting(false) }
+  const handleSubmit = async () => {
+    if (!comment.trim()) return
+    setSubmitting(true)
+    if (username) localStorage.setItem('duck_username', username)
+    let spottedAt = null
+    if (spottedTime !== 'now') {
+      const today = new Date()
+      const [h, m] = spottedTime.split(':').map(Number)
+      today.setHours(h, m, 0, 0)
+      spottedAt = today.toISOString()
+    }
+    await onSubmit({ landmark, duckCount, comment, username, photo, spottedAt })
+    setSubmitting(false)
+  }
   const ls = { display: 'block', fontSize: 13, fontWeight: 700, color: '#2d6a4f', marginBottom: 8, fontFamily: "'Noto Sans KR',sans-serif" }
   const is = { width: '100%', padding: 12, borderRadius: 12, border: '1px solid #ddd', fontSize: 14, fontFamily: "'Noto Sans KR',sans-serif", outline: 'none', boxSizing: 'border-box', marginBottom: 20 }
   const cb = { width: 36, height: 36, borderRadius: '50%', border: '1px solid #ddd', background: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2d6a4f' }
@@ -229,6 +247,19 @@ function ReportForm({ selectedLandmark, onSubmit, onClose }) {
 
         <label style={ls}>🏷️ 닉네임</label>
         <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="닉네임 (선택)" style={is} />
+
+        <label style={ls}>🕐 언제 봤나요?</label>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+          <button onClick={() => setSpottedTime('now')} style={{ flex: 1, padding: '10px 12px', borderRadius: 12, border: spottedTime === 'now' ? '2px solid #2d6a4f' : '1px solid #ddd', background: spottedTime === 'now' ? '#e8f4e8' : '#fff', fontSize: 13, fontFamily: "'Noto Sans KR',sans-serif", fontWeight: spottedTime === 'now' ? 700 : 500, color: spottedTime === 'now' ? '#1b4332' : '#636e72', cursor: 'pointer' }}>방금 전</button>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <input
+              type="time"
+              value={spottedTime === 'now' ? '' : spottedTime}
+              onChange={(e) => setSpottedTime(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 12, border: spottedTime !== 'now' ? '2px solid #2d6a4f' : '1px solid #ddd', background: spottedTime !== 'now' ? '#e8f4e8' : '#fff', fontSize: 13, fontFamily: "'Noto Sans KR',sans-serif", fontWeight: spottedTime !== 'now' ? 700 : 500, color: spottedTime !== 'now' ? '#1b4332' : '#636e72', cursor: 'pointer', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+        </div>
 
         <label style={ls}>📍 어디서 봤나요?</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
@@ -313,7 +344,7 @@ export default function Home() {
     finally { setLoading(false) }
   }
 
-  async function handleSubmit({ landmark, duckCount, comment, username, photo }) {
+  async function handleSubmit({ landmark, duckCount, comment, username, photo, spottedAt }) {
     try {
       let photo_url = null
       if (photo) {
@@ -322,7 +353,9 @@ export default function Home() {
         const { error: ue } = await supabase.storage.from('duck-photos').upload(fileName, photo)
         if (!ue) { const { data: u } = supabase.storage.from('duck-photos').getPublicUrl(fileName); photo_url = u.publicUrl }
       }
-      const { error } = await supabase.from('sightings').insert({ landmark_id: landmark.id, landmark_name: landmark.name, duck_count: duckCount, comment, username: username || '익명', photo_url, likes: 0 })
+      const row = { landmark_id: landmark.id, landmark_name: landmark.name, duck_count: duckCount, comment, username: username || '익명', photo_url, likes: 0 }
+      if (spottedAt) row.spotted_at = spottedAt
+      const { error } = await supabase.from('sightings').insert(row)
       if (error) throw error
       setShowForm(false); setSelectedLandmark(null)
       showToast('제보 완료! 아기오리들이 고마워해요 🐥')
@@ -412,7 +445,7 @@ export default function Home() {
             {sightings.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, padding: '10px 14px', background: 'linear-gradient(135deg,#e8f8e0,#d4f1e0)', borderRadius: 12, border: '1px solid rgba(39,174,96,.15)' }}>
                 <span style={{ fontSize: 16, animation: 'wobble 1.5s ease-in-out infinite' }}>🐥</span>
-                <span style={{ fontSize: 13, color: '#1b4332', fontWeight: 600 }}>최근 목격: <strong>{LANDMARKS.find((l) => l.id === sightings[0].landmark_id)?.name || sightings[0].landmark_name}</strong> ({timeAgo(sightings[0].created_at)})</span>
+                <span style={{ fontSize: 13, color: '#1b4332', fontWeight: 600 }}>최근 목격: <strong>{LANDMARKS.find((l) => l.id === sightings[0].landmark_id)?.name || sightings[0].landmark_name}</strong> ({timeAgo(sightings[0].spotted_at || sightings[0].created_at)})</span>
               </div>
             )}
             {sightings.length === 0 ? (
