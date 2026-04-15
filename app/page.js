@@ -198,7 +198,10 @@ function ReportForm({ selectedLandmark, onSubmit, onClose }) {
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(27,67,50,.5)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000, animation: 'fadeIn .3s ease' }} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div style={{ background: '#fff', borderRadius: '24px 24px 0 0', padding: '24px 20px 32px', width: '100%', maxWidth: 480, maxHeight: '85vh', overflow: 'auto', animation: 'slideUp .3s ease' }}>
         <div style={{ width: 40, height: 4, borderRadius: 2, background: '#ddd', margin: '0 auto 20px' }} />
-        <h3 style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 800, color: '#1b4332', fontFamily: "'Noto Sans KR',sans-serif", display: 'flex', alignItems: 'center', gap: 8 }}>🐥 아기오리 제보하기</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#1b4332', fontFamily: "'Noto Sans KR',sans-serif", display: 'flex', alignItems: 'center', gap: 8 }}>🐥 아기오리 제보하기</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 24, color: '#b2bec3', cursor: 'pointer', padding: 4 }}>✕</button>
+        </div>
 
         <label style={ls}>🏷️ 닉네임</label>
         <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="닉네임 (선택)" style={is} />
@@ -277,7 +280,13 @@ export default function Home() {
   }
 
   async function handleLike(id, newCount) {
-    await supabase.from('sightings').update({ likes: newCount }).eq('id', id)
+    const { error } = await supabase
+      .from('sightings')
+      .update({ likes: newCount })
+      .eq('id', id)
+      .select()
+    if (error) console.error('좋아요 실패:', error)
+    else loadSightings()
   }
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3000) }
