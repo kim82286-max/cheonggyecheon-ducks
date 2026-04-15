@@ -134,9 +134,25 @@ function StreamMap({ sightings, onSelect, selected }) {
   )
 }
 
-function SightingCard({ sighting, onLike }) {
+function SightingCard({ sighting, onLike, isAdmin, onDelete }) {
   const [liked, setLiked] = useState(false)
   const lm = LANDMARKS.find((l) => l.id === sighting.landmark_id) || { name: sighting.landmark_name || '알 수 없음', icon: '📍' }
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const likedIds = JSON.parse(localStorage.getItem('duck_liked') || '[]')
+      if (likedIds.includes(sighting.id)) setLiked(true)
+    }
+  }, [sighting.id])
+
+  const handleLikeClick = async () => {
+    if (liked) return
+    setLiked(true)
+    const likedIds = JSON.parse(localStorage.getItem('duck_liked') || '[]')
+    likedIds.push(sighting.id)
+    localStorage.setItem('duck_liked', JSON.stringify(likedIds))
+    await onLike(sighting.id, (sighting.likes || 0) + 1)
+  }
   return (
     <div style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 12px rgba(45,106,79,.06)', border: '1px solid rgba(76,145,115,.1)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -165,13 +181,21 @@ function SightingCard({ sighting, onLike }) {
           ))}
         </div>
       )}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        {isAdmin && (
+          <button
+            onClick={() => onDelete(sighting.id)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 8, fontSize: 12, color: '#d63031' }}
+          >
+            🗑️ <span style={{ fontFamily: "'Noto Sans KR',sans-serif" }}>삭제</span>
+          </button>
+        )}
         <button
-          onClick={async () => { if (liked) return; setLiked(true); await onLike(sighting.id, (sighting.likes || 0) + 1) }}
+          onClick={handleLikeClick}
           style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 8, fontSize: 13, color: liked ? '#e17055' : '#b2bec3' }}
         >
           <span>{liked ? '❤️' : '🤍'}</span>
-          <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{(sighting.likes || 0) + (liked ? 1 : 0)}</span>
+          <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{sighting.likes || 0}</span>
         </button>
       </div>
     </div>
@@ -250,8 +274,35 @@ export default function Home() {
   const [tab, setTab] = useState('feed')
   const [toast, setToast] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [showAdminLogin, setShowAdminLogin] = useState(false)
+  const [adminPw, setAdminPw] = useState('')
 
-  useEffect(() => { loadSightings() }, [])
+  useEffect(() => {
+    loadSightings()
+    if (typeof window !== 'undefined') {
+      setIsAdmin(localStorage.getItem('duck_admin') === 'true')
+    }
+  }, [])
+
+  function handleAdminLogin() {
+    // 비밀번호는 나중에 바꿔주세요!
+    if (adminPw === 'duckmaster2025') {
+      setIsAdmin(true)
+      localStorage.setItem('duck_admin', 'true')
+      setShowAdminLogin(false)
+      setAdminPw('')
+      showToast('관리자 모드 활성화 🔓')
+    } else {
+      showToast('비밀번호가 틀렸어요')
+    }
+  }
+
+  function handleAdminLogout() {
+    setIsAdmin(false)
+    localStorage.removeItem('duck_admin')
+    showToast('관리자 모드 해제 🔒')
+  }
 
   async function loadSightings() {
     try {
@@ -289,6 +340,13 @@ export default function Home() {
     else loadSightings()
   }
 
+  async function handleDelete(id) {
+    if (!confirm('이 제보를 삭제할까요?')) return
+    const { error } = await supabase.from('sightings').delete().eq('id', id)
+    if (error) { console.error('삭제 실패:', error); showToast('삭제 실패 😢') }
+    else { showToast('제보가 삭제되었어요'); loadSightings() }
+  }
+
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
   return (
@@ -316,6 +374,18 @@ export default function Home() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: 'rgba(45,106,79,.08)', borderRadius: 20, fontSize: 12, color: '#2d6a4f', fontWeight: 700 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#27ae60', animation: 'pulse 2s ease-in-out infinite', display: 'inline-block' }} />LIVE
           </div>
+        </div>
+        {/* 관리자 버튼 */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+          {isAdmin ? (
+            <button onClick={handleAdminLogout} style={{ background: 'rgba(214,48,49,.08)', border: 'none', borderRadius: 12, padding: '4px 10px', fontSize: 11, color: '#d63031', fontWeight: 600, cursor: 'pointer', fontFamily: "'Noto Sans KR',sans-serif" }}>
+              🔓 관리자 모드 해제
+            </button>
+          ) : (
+            <button onClick={() => setShowAdminLogin(true)} style={{ background: 'none', border: 'none', padding: '4px 10px', fontSize: 11, color: '#b2bec3', cursor: 'pointer', fontFamily: "'Noto Sans KR',sans-serif" }}>
+              🔒
+            </button>
+          )}
         </div>
         {/* 탭 */}
         <div style={{ display: 'flex', gap: 4, marginTop: 12, background: 'rgba(45,106,79,.06)', borderRadius: 12, padding: 3 }}>
@@ -353,7 +423,7 @@ export default function Home() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {sightings.map((s) => (<SightingCard key={s.id} sighting={s} onLike={handleLike} />))}
+                {sightings.map((s) => (<SightingCard key={s.id} sighting={s} onLike={handleLike} isAdmin={isAdmin} onDelete={handleDelete} />))}
               </div>
             )}
           </>
@@ -363,6 +433,28 @@ export default function Home() {
       <button onClick={() => setShowForm(true)} style={{ position: 'fixed', bottom: 24, right: 24, width: 60, height: 60, borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg,#2d6a4f,#40916c)', color: '#fff', fontSize: 28, cursor: 'pointer', boxShadow: '0 4px 20px rgba(45,106,79,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>📍</button>
 
       {showForm && <ReportForm selectedLandmark={selectedLandmark} onSubmit={handleSubmit} onClose={() => { setShowForm(false); setSelectedLandmark(null) }} />}
+
+      {/* 관리자 로그인 모달 */}
+      {showAdminLogin && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(27,67,50,.5)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={(e) => e.target === e.currentTarget && setShowAdminLogin(false)}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 24, width: '90%', maxWidth: 320, textAlign: 'center' }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 800, color: '#1b4332', fontFamily: "'Noto Sans KR',sans-serif" }}>관리자 로그인</h3>
+            <input
+              type="password"
+              value={adminPw}
+              onChange={(e) => setAdminPw(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
+              placeholder="비밀번호 입력"
+              style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid #ddd', fontSize: 14, fontFamily: "'Noto Sans KR',sans-serif", outline: 'none', boxSizing: 'border-box', marginBottom: 12 }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: 12, borderRadius: 12, border: '1px solid #ddd', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'Noto Sans KR',sans-serif", color: '#636e72' }}>취소</button>
+              <button onClick={handleAdminLogin} style={{ flex: 1, padding: 12, borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#2d6a4f,#40916c)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: "'Noto Sans KR',sans-serif" }}>확인</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div style={{ position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)', background: '#1b4332', color: '#fff', padding: '12px 24px', borderRadius: 14, fontSize: 14, fontWeight: 600, zIndex: 2000, animation: 'slideDown .3s ease', boxShadow: '0 4px 20px rgba(0,0,0,.2)', fontFamily: "'Noto Sans KR',sans-serif" }}>{toast}</div>
