@@ -251,13 +251,17 @@ function ReportForm({ selectedLandmark, onSubmit, onClose }) {
         <label style={ls}>🕐 언제 봤나요?</label>
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
           <button onClick={() => setSpottedTime('now')} style={{ flex: 1, padding: '10px 12px', borderRadius: 12, border: spottedTime === 'now' ? '2px solid #2d6a4f' : '1px solid #ddd', background: spottedTime === 'now' ? '#e8f4e8' : '#fff', fontSize: 13, fontFamily: "'Noto Sans KR',sans-serif", fontWeight: spottedTime === 'now' ? 700 : 500, color: spottedTime === 'now' ? '#1b4332' : '#636e72', cursor: 'pointer' }}>방금 전</button>
-          <div style={{ flex: 1, position: 'relative' }}>
+          <div style={{ flex: 1, position: 'relative' }} onClick={() => { const el = document.getElementById('time-picker'); if (el) { el.showPicker ? el.showPicker() : el.focus() } }}>
             <input
+              id="time-picker"
               type="time"
               value={spottedTime === 'now' ? '' : spottedTime}
               onChange={(e) => setSpottedTime(e.target.value)}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 12, border: spottedTime !== 'now' ? '2px solid #2d6a4f' : '1px solid #ddd', background: spottedTime !== 'now' ? '#e8f4e8' : '#fff', fontSize: 13, fontFamily: "'Noto Sans KR',sans-serif", fontWeight: spottedTime !== 'now' ? 700 : 500, color: spottedTime !== 'now' ? '#1b4332' : '#636e72', cursor: 'pointer', outline: 'none', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 12, border: spottedTime !== 'now' ? '2px solid #2d6a4f' : '1px solid #ddd', background: spottedTime !== 'now' ? '#e8f4e8' : '#fff', fontSize: 13, fontFamily: "'Noto Sans KR',sans-serif", fontWeight: spottedTime !== 'now' ? 700 : 500, color: spottedTime !== 'now' ? '#1b4332' : 'transparent', cursor: 'pointer', outline: 'none', boxSizing: 'border-box' }}
             />
+            {spottedTime === 'now' && (
+              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#636e72', fontFamily: "'Noto Sans KR',sans-serif", pointerEvents: 'none' }}>직접 입력</span>
+            )}
           </div>
         </div>
 
